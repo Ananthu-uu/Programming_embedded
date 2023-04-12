@@ -1,4 +1,12 @@
+
 //Controlled Environmental System
+
+// Authors 
+/*
+    Anantha Krishnan
+    Shweta Rajasekhar
+    Shalu Prakasia
+*/
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
