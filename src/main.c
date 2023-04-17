@@ -128,7 +128,7 @@ int main(void)
     tmp[1] = (int32_t)(temp_buf[1])<<4;
     tmp[2] = (int32_t)(temp_buf[2])<<12;
     temp_adc = (tmp[0]|tmp[1]|tmp[2]);
-    printk("temp adc: %d\n",temp_adc);
+    //printk("temp adc: %d\n",temp_adc);
 
     var1 = ((int32_t)temp_adc >>3) - ((int32_t)par_t1 << 1);
     var2 = (var1 *(int32_t)par_t2) >> 11;
@@ -142,7 +142,7 @@ int main(void)
 
     //humidity calculation
     temp_scaled = (int32_t)temp_comp;
-    v1 = (int_32)hum_adc - (int32_t)((int32_t)par_h1 << 4) - (((temp_scaled * (int32_t)par_h3)/((int32_t)100)) >> 1);
+    v1 = (int32_t)hum_adc - (int32_t)((int32_t)par_h1 << 4) - (((temp_scaled * (int32_t)par_h3)/((int32_t)100)) >> 1);
     v2 = ((int32_t)par_h2 * (((temp_scaled *
     (int32_t)par_h4) / ((int32_t)100)) +
     (((temp_scaled * ((temp_scaled * (int32_t)par_h5) /
@@ -152,7 +152,7 @@ int main(void)
     ((temp_scaled * (int32_t)par_h7) / ((int32_t)100))) >> 4; v5 = ((v3 >> 14) * (v3 >> 14)) >> 10;
     v6 = (v4 * v5) >> 1;
     hum_comp = (((v3 + v6) >> 10) * ((int32_t) 1000)) >> 12;
-
+    printk("Humidity: %d\n", hum_comp);
 
     }
     printk("I'm done\n");
