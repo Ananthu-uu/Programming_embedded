@@ -4,11 +4,11 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <bme680_reg.h>
-#include "pico/stdlib.h"
-#include "hardware/adc.h"
+#include <zephyr/drivers/adc.h>
 
-int main(void)
+int main()
 {
     adc_init();
     adc_gpio_init(26);

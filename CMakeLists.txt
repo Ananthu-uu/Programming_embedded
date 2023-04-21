@@ -17,9 +17,9 @@ set(OPENOCD_DEFAULT_PATH "/usr/local/share/openocd/scripts")
 project(lab3_part1)
 # Add include directory 
 target_include_directories(app PRIVATE src/inc)
-add_executable(adc_read src/main.c)
+#add_executable(adc_read src/main.c)
 # Add the standard library to the build
-target_link_libraries(adc_read pico_stdlib hardware_adc)
+#target_link_libraries(adc_read pico_stdlib hardware_adc)
 
 # Add source files
 FILE(GLOB SRC_FILES "src/*.c")

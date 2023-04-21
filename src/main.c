@@ -13,7 +13,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
-
+#include "sensors/soil_moisture.c"
 #include <bme680_reg.h>
 
 
@@ -36,7 +36,7 @@
 const struct device * i2c_dev = DEVICE_DT_GET(DT_NODELABEL(I2C_LABEL));
 
 
-int main(void)
+int main()
 {
     printk("I'm in main\n");
     
