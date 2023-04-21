@@ -14,10 +14,17 @@ static const struct adc_dt_spec adc_channels = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(ze
 
 void main(void)
 {
-	int16_t quality;
+	int quality;
+	int16_t buf;
+	struct adc_sequence sequence = {
+		.buffer = &buf,
+		/* buffer size in bytes, not number of samples */
+		.buffer_size = sizeof(buf),
+	};
+
 
 	while (1) {
-		quality = adc_read(adc_channels.dev);
+		quality = adc_read(adc_channels.dev, &sequence);
 		if (quality >= 0)// if a valid data returned.
 		{
         	if (quality==0)
