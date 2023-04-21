@@ -10,17 +10,14 @@
 #include <zephyr/sys/util.h>
 
 /* Data of ADC io-channels specified in devicetree. */
-static const struct adc_dt_spec adc_channels[] = {
-	DT_FOREACH_PROP_ELEM(DT_PATH(zephyr_user), io_channels,
-			     DT_SPEC_AND_COMMA)
-};
+static const struct adc_dt_spec adc_channels = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
 
 void main(void)
 {
 	int16_t quality;
 
 	while (1) {
-		quality = adc_read(adc_channels.dev, adc_sequence);
+		quality = adc_read(adc_channels.dev);
 		if (quality >= 0)// if a valid data returned.
 		{
         	if (quality==0)
