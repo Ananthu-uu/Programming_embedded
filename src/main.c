@@ -1,159 +1,182 @@
-
-//Controlled Environmental System
-
-// Authors 
-/*
-    Anantha Krishnan
-    Shweta Rajasekhar
-    Shalu Prakasia
-*/
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
-#include "sensors/soil_moisture.c"
+
 #include <bme680_reg.h>
 
+#define CONFIG_VALUE        (2<<2)         //FILTER COEFFICIENT = 15
+#define TEMP_ENABLE         ((2<<5)|(1<<0))   //ENABLE TEMP BITS AND FORCED MODE
+#define HUM_OVERSAMPLE      2               // HUMIDITY OVERSAMPLE 2
 
-
-
-
-#define I2C_LABEL   i2c0
-
+#define BME680_ADDR     0x77           //ADDRESS OF THE SENSOR
 #define MY_STACK_SIZE   5000
-// #if DT_NODE_HAS_STATUS(DT_ALIAS(i2c_0), okay)
-// #define I2C_DEV_NODE	DT_ALIAS(i2c_0)
-// #elif DT_NODE_HAS_STATUS(DT_ALIAS(i2c_1), okay)
-// #define I2C_DEV_NODE	DT_ALIAS(i2c_1)
-// #elif DT_NODE_HAS_STATUS(DT_ALIAS(i2c_2), okay)
-// #define I2C_DEV_NODE	DT_ALIAS(i2c_2)
-// #else
-// #error "Please set the correct I2C device"
-// #endif
-//uint32_t i2c_cfg = I2C_SPEED_SET(I2C_SPEED_STANDARD) | I2C_MODE_CONTROLLER;
-const struct device * i2c_dev = DEVICE_DT_GET(DT_NODELABEL(I2C_LABEL));
 
+#define I2C_NODE    DT_NODELABEL(i2c0) 	
 
-int main()
+void main(void)
 {
-    printk("I'm in main\n");
+    int ret;
+    uint8_t buffer[20];
+
+    int32_t var1, var2_1, var2_2, var2, var3, var4, var5, var6;
     
-    i2c_reg_write_byte(i2c_dev, BME680_ADDR, BME680_CTRL_MEAS ,0b01000001);    // CONFIGURING THE TEMP SENSOR  
-    i2c_reg_write_byte(i2c_dev, BME680_ADDR, BME680_CTRL_HUM ,0b00000001);     //configuring the humidity sensor     
-    //CONFIGURING THE IIR filter
-    i2c_reg_write_byte(i2c_dev, BME680_ADDR, BME680_CONFIG ,0b00001000);   
+    int32_t par_t1, par_t2, par_t3;
+    int32_t t_fine, temp_comp, adc_temp;
 
-    //temperature variables 
-    uint8_t temp_buf[3];
-    int32_t temp_adc;
-    int32_t tmp[3];
-    int32_t var1, var2, var3;
-    uint8_t par_t1_lsb,par_t1_msb, par_t2_lsb,par_t2_msb,par_t3;
-    int32_t par_t1, par_t2, t11, t12, t21, t22;
+    uint16_t par_h1, par_h2;
+    int8_t par_h3, par_h4, par_h5, par_h7;
+    uint8_t par_h6;
+    uint16_t hum_adc;
+    int32_t hum_comp;
 
-    
-    //temperature
+    const struct device *const dev = DEVICE_DT_GET(I2C_NODE);
 
-    i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_T1_LSB, (&par_t1_lsb));
-    printk("par t1 LSB: %d\n",par_t1_lsb);
-    i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_T1_MSB, (&par_t1_msb));
-    printk("par t1 MSB: %d\n",par_t1_msb);
-    i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_T2_LSB, (&par_t2_lsb));
-    printk("par t2 LSB: %d\n",par_t2_lsb);
-    i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_T2_MSB, (&par_t2_msb));
-    printk("par t1 MSB: %d\n",par_t2_msb);
-    i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_T3, (&par_t3));
-    t11 = (int32_t)(par_t1_lsb);
-    t12 = (int32_t)(par_t1_msb);
-    //printk("I'm in part1\n");
-    par_t1 = t11 | (t12 << 8);
-    //printk("par t1: %d\n", par_t1);
-    t21 = (int32_t)(par_t2_lsb);
-    t22 = (int32_t)(par_t2_msb);
-    par_t2 = t21 | (t22<<8);
-    //printk("par t2: %d\n", par_t2);
-
-    //humidity variables
-    uint8_t hum_msb,hum_lsb;
-    int16_t hum;
-    uint8_t par_h1_lsb, par_h1_msb, par_h2_lsb, par_h2_msb, par_h3, par_h4, par_h5, par_h6, par_h7, hum_adc_lsb, hum_adc_msb;
-    int32_t par_h1, par_h2;
-    int16_t hum_adc;
-    int32_t temp_scaled;
-    int32_t v1,v2,v3,v4,v5,v6, hum_comp;
-
-    //humidity
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H1_LSB, (&par_h1_lsb));
-        printk("par h1 lsb: %d\n",par_h1_lsb);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H1_MSB, (&par_h1_msb));
-        printk("par h1 msb: %d\n",par_h1_msb);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H2_MSB, (&par_h2_msb));
-        printk("par h2 msb: %d\n",par_h2_msb);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H3, (&par_h3));
-        printk("par h3 : %d\n",par_h3);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H4, (&par_h4));
-        printk("par h4 : %d\n",par_h4);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H5, (&par_h5));
-        printk("par h5 : %d\n",par_h5);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H6, (&par_h6));
-        printk("par h6 : %d\n",par_h6);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_PAR_H7, (&par_h7));
-        printk("par h7 : %d\n",par_h7);
-        par_h1 = (par_h1_lsb && 0b00001111) || ((int32_t)par_h1_msb << 4);
-        par_h2 = (par_h1_lsb>>4) || ((int32_t)par_h2_msb << 4);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_HUM_ADC_LSB, (&hum_adc_lsb));
-        printk("hum_adc_lsb : %d\n",hum_adc_lsb);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_HUM_ADC_MSB, (&hum_adc_msb));
-        printk("hum_adc_msb : %d\n",hum_adc_msb);
-        hum_adc = (hum_adc_lsb) || ((int16_t)hum_adc_msb << 8);
-    while(1)
-    {
-        //temperature
-        i2c_reg_write_byte(i2c_dev, BME680_ADDR, BME680_CTRL_MEAS ,0b01000001);  
-        printk("I'm in loop\n");
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_TEMP_XLSB, temp_buf);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_TEMP_LSB, temp_buf+1);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_TEMP_MSB, temp_buf+2);
-        //humidity
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_HUM_LSB, (&hum_lsb));
-        printk("hum LSB: %d\n",hum_lsb);
-        i2c_reg_read_byte(i2c_dev, BME680_ADDR, BME680_HUM_MSB, (&hum_msb));
-        printk("hum MSB: %d\n",hum_msb);
-        
-    //temperature calculation
-    // type casting to 32 bit
-    tmp[0] = (int32_t)(temp_buf[0])>>4;
-    tmp[1] = (int32_t)(temp_buf[1])<<4;
-    tmp[2] = (int32_t)(temp_buf[2])<<12;
-    temp_adc = (tmp[0]|tmp[1]|tmp[2]);
-    //printk("temp adc: %d\n",temp_adc);
-
-    var1 = ((int32_t)temp_adc >>3) - ((int32_t)par_t1 << 1);
-    var2 = (var1 *(int32_t)par_t2) >> 11;
-    var3 = ((((var1>>1)*(var1 >> 1))>>12)*((int32_t)par_t3 << 4))>> 14;
-    int32_t t_fine =  var2 + var3 ;
-    int32_t temp_comp = (int32_t)((t_fine*5)+ 128)>> 8;
-    printk("Temperature: %d.%06d \n", (temp_comp/100), ((temp_comp%100)*1000));
-
-    k_sleep(K_MSEC(5000));
-
-
-    //humidity calculation
-    temp_scaled = (int32_t)temp_comp;
-    v1 = (int32_t)hum_adc - (int32_t)((int32_t)par_h1 << 4) - (((temp_scaled * (int32_t)par_h3)/((int32_t)100)) >> 1);
-    v2 = ((int32_t)par_h2 * (((temp_scaled *
-    (int32_t)par_h4) / ((int32_t)100)) +
-    (((temp_scaled * ((temp_scaled * (int32_t)par_h5) /
-    ((int32_t)100))) >> 6) / ((int32_t)100)) + ((int32_t)(1 << 14)))) >> 10;
-    v3 = v1 * v2;
-    v4 = (((int32_t)par_h6 << 7) +
-    ((temp_scaled * (int32_t)par_h7) / ((int32_t)100))) >> 4; v5 = ((v3 >> 14) * (v3 >> 14)) >> 10;
-    v6 = (v4 * v5) >> 1;
-    hum_comp = (((v3 + v6) >> 10) * ((int32_t) 1000)) >> 12;
-    printk("Humidity: %d\n", hum_comp);
-
+/*******************   DEVICE READY CHECK   **************************/
+    if (!device_is_ready(dev)) {
+		printk("Bus %s not ready\n", dev->name);
+		return;
+	}
+    else{
+        printk("\n************************************************\n");
+        printk("\nBus %s is Ready!!!",dev->name);
     }
-    printk("I'm done\n");
+/*********************************************************************/
+
+/*******************   INITIALIZATION   ******************************/    
+
+    // 1. Configure the sensor register 0x75 with filter coefficient
+    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CONFIG, CONFIG_VALUE);
+    if(ret<0){
+        printk("\nError!! ");
+        return;
+    }
+    else{
+        printk("\nSuccessfully configured with filter coefficent");
+    }
+
+    // 2. Configure the register 0x74(Temperature oversampling) to measure temperature
+    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
+    if(ret<0){
+        printk("\nError!! ");
+        // return;
+    }
+    else{
+        printk("\nSuccessfully Enabled Temprature measurement with over sampling");
+    }
+    // 3. Configure the register 0x75(Humidity oversampling)
+    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_HUM, HUM_OVERSAMPLE);
+    if(ret<0){
+        printk("\nError!! ");
+        // return;
+    }
+    else{
+        printk("\nSuccessfully Enabled Humidity measurement with over sampling 2");
+        printk("\n****************************************************************\n");
+    }
+
+/*******************************************************************************************************/
+
+
+/******* CALIBRATION PARAMETERS ********************/ 
+    ret = i2c_burst_read(dev, BME680_ADDR, BME680_PAR, buffer, 10);
+    if(ret<0){
+    //    printf("\n Error reading calibration parameter");
+    }
+    else{
+        par_h1 = (uint16_t)(((uint16_t)buffer[2] << 4) | (buffer[1] & 0x0F));
+        par_h2 = (uint16_t)(((uint16_t)buffer[0] << 4) | (buffer[1] >> 4));
+        par_h3 = (int8_t)buffer[3];
+        par_h4 = (int8_t)buffer[4];
+        par_h5 = (int8_t)buffer[5];
+        par_h6 = (uint8_t)buffer[6];
+        par_h7 = (int8_t)buffer[7];
+
+        // printk("\nCALIBRATION PARAMETERS\nPAR1LSB = %d \t PAR1MSB = %d ", buffer[8], buffer[9]);
+        par_t1 = (int32_t)(((uint16_t)buffer[9]) << 8) | (uint16_t)buffer[8]; 
+    } 
+    ret = i2c_burst_read(dev, BME680_ADDR, BME680_TEMP_PAR2, (buffer+10), 3);
+    if(ret<0){
+    //    printf("\n Error reading calibration parameter");
+    }
+    else{
+        // printk("\nPAR2LSB = %d \t PAR2MSB = %d ", buffer[10], buffer[11]);
+        par_t2 = (int32_t)(((int16_t)buffer[11]) << 8) | (int16_t)buffer[10];
+        // printk("\nPAR3 %d", buffer[8]);
+        par_t3 = (int32_t)buffer[12];
+    }
+    // printk("\npar_t1 = %d", par_t1);
+    // printk("\npar_t2 = %d", par_t2);
+    // printk("\npar_t3 = %d", par_t3);
+
+    // printk("\npar_h1 = %d", par_h1);
+    // printk("\npar_h2 = %d", par_h2);
+    // printk("\npar_h3 = %d", par_h3);
+    // printk("\npar_h4 = %d", par_h4);
+    // printk("\npar_h5 = %d", par_h5);
+    // printk("\npar_h6 = %d", par_h6);
+    // printk("\npar_h7 = %d", par_h7);
+
+/*******************************************************************************************************/
+
+    while (1)
+    {
+        k_sleep(K_MSEC(3000));
+
+/*******                READ NEW DATA BIT               *********************/
+        ret = i2c_reg_read_byte(dev, BME680_ADDR, BME680_EAS_STATUS_0, (buffer+13));
+        if(buffer[13] & 0x80){
+            // printk("\nNew Data Available");
+
+/********           READ TEMP (XLSB LSB MSB) AND HUMIDITY (MSB AND LSB)    *******************/ 
+            ret = i2c_burst_read(dev, BME680_ADDR, BME680_TEMP_MSB, (buffer+14), 5);
+            if(ret<0){
+                // printf("\n Error reading temperature data");
+            }
+            else{
+                // printk("\nXLSB = %d \t LSB = %d \t MSB = %d", buffer[16], buffer[15], buffer[14]);
+                printk("\nHUM_MSB = %d \tHUM_LSB = %d",buffer[17], buffer[18]);
+            }
+/*******               (xlsb (7 to 4 bits hence right shift))    ***************/ 
+            adc_temp = (((int32_t)buffer[16])>>4) | (((int32_t)buffer[15])<<4) | (((int32_t)buffer[14])<<12);
+            // printk("\nTEMPERATURE ADC RAW VALUE IS %d", adc_temp);
+            hum_adc = (((uint16_t)buffer[17] << 8) | (uint16_t)buffer[18]);
+            printk("\nHUMIDITY_ADC RAW VALUE IS %d", hum_adc);
+
+/*******************   TEMPERATURE CALCULATION   ******************************/  
+            var1 = ((int32_t)adc_temp>>3) - ((int32_t)par_t1 << 1);
+            var2 = (var1 * (int32_t)par_t2) >> 11;
+            var3 = (int32_t)(((((var1 >> 1) * (var1 >> 1)) >> 12) * ((int32_t)par_t3 << 4)) >> 14);
+            t_fine = (int32_t)(var2 + var3);
+            temp_comp = (int32_t)(((t_fine * 5) + 128 ) >> 8);
+/*******************************************************************************************************/
+
+/*******************   HUMIDITY CALCULATION   ******************************/  
+            var1 = (int32_t)hum_adc - (int32_t)((int32_t)par_h1 << 4) - ((temp_comp * (int32_t)par_h3) / ((int32_t)100) >> 1);
+            var2_1 = (int32_t)par_h2;
+            var2_2 = ((temp_comp * (int32_t)par_h4) / (int32_t)100) + (((temp_comp * ((temp_comp * (int32_t)par_h5) / ((int32_t)100))) >> 6) / ((int32_t)100)) +  (int32_t)(1 << 14);
+            var2 = (var2_1 * var2_2) >> 10;
+            var3 = var1 * var2;
+            var4 = (((int32_t)par_h6 << 7) + ((temp_comp * (int32_t)par_h7) / ((int32_t)100))) >> 4;
+            var5 = ((var3 >> 14) * (var3 >> 14)) >> 10;
+            var6 = (var4 * var5) >> 1;
+            hum_comp = (((var3 + var6) >> 10) * ((int32_t)1000)) >> 12;
+            
+/*******************************************************************************************************/
+            printk("\nTemperature :: %d.%06d degC", (temp_comp / 100), ((temp_comp%100)*1000));
+            printk("\nHumidity :: %d.%06d",(hum_comp / 1000),((hum_comp % 1000)*1000));
+        }
+
+        else{
+            printk("\nNo new data at the moment!! %x", buffer[0]);
+        }
+/*******            TRIGGER NEXT MEASUREMENT              ********************/         
+        ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
+        if(ret<0){
+            printk("\nError!! ");
+            // return;
+        }
+    }
 }

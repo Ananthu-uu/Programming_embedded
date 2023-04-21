@@ -6,7 +6,6 @@
 #define BME680_STATUS       0x73
 #define BME680_RESET        0xE0
 #define BME680_ID           0xD0
-#define BME680_ADDR         0x77
 #define BME680_CONFIG       0x75
 #define BME680_CTRL_MEAS    0x74
 #define BME680_CTRL_HUM     0x72 
@@ -58,21 +57,10 @@
 #define BME680_PRESS_MSB    0x1F 
 #define BME680_EAS_STATUS_0 0x1D
 
-#define BME680_PAR_T1_LSB   0xE9
-#define BME680_PAR_T1_MSB   0xEA
-#define BME680_PAR_T2_LSB   0x8A 
-#define BME680_PAR_T2_MSB   0x8B
-#define BME680_PAR_T3       0x8C
+#define BME680_PAR          0xE1
 
-#define BME680_PAR_H1_LSB   0xE2
-#define BME680_PAR_H1_MSB   0xE3
-#define BME680_PAR_H2_MSB   0xE1
-#define BME680_PAR_H3       0xE4
-#define BME680_PAR_H4       0xE5
-#define BME680_PAR_H5       0xE6
-#define BME680_PAR_H6       0xE7
-#define BME680_PAR_H7       0xE8
-#define BME680_HUM_ADC_LSB  0x26
-#define BME680_HUM_ADC_MSB  0x25
+#define BME680_TEMP_PAR2    0x8A 
+
+
 
 #endif /* _BME680_H_ */
