@@ -1,7 +1,42 @@
+/*
+ * **********	SENSORS		***********
+ * 	-> BME680
+ * 	-> SEN0114
+ * 	-> AIR QUALITY SENSOR V1.3
+ * 
+ * --------------------------------------------------
+ * 
+ * 	Editor : Shalu Prakasia
+ *           Anantha Krishnan
+ *           Shweta Rajasekhar
+ * 
+ * --------------------------------------------------
+ * Connect the soil moisture sensor to ADC0 (GPIO 26) 
+ * Sensor value Range
+ * 0 	~	300	 - dry soil
+ * 300 	~	700  - humid soil
+ * 700	~	1023 - water
+* --------------------------------------------------
+ * Connect the air quality sensor to ADC1 (GPIO 27)
+ * Sensor value Range
+ * 0	~	300	- Fresh air 
+ * 300	~	700	- Low pollution
+ * > 700		- High pollution
+* --------------------------------------------------
+ * BME680 connected to I2C0
+ * 
+*/
+
+#include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
 
@@ -12,13 +47,68 @@
 #define HUM_OVERSAMPLE      2               // HUMIDITY OVERSAMPLE 2
 
 #define BME680_ADDR     0x77           //ADDRESS OF THE SENSOR
-#define MY_STACK_SIZE   5000
 
 #define I2C_NODE    DT_NODELABEL(i2c0) 	
 
-void main(void)
+#define STACK_SIZE  500 
+
+static const struct adc_dt_spec soil_moisture_chan0 = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
+static const struct adc_dt_spec air_quality_chan1 = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 1);
+
+int16_t soilbuf; 
+struct adc_sequence soil_sequence = {
+	.buffer = &soilbuf,
+	.buffer_size = sizeof(soilbuf),
+};
+
+int16_t airbuf;
+struct adc_sequence air_sequence = {
+	.buffer = &airbuf,
+	.buffer_size = sizeof(airbuf),
+};
+
+// Thread task to read the adc channel
+void adc_task(struct adc_dt_spec* chan, struct adc_sequence* seq)
 {
-    int ret;
+	int err;
+	// check if the sensor device is ready
+	if (!device_is_ready(chan->dev)) {
+		printk("ADC controller device not ready\n");
+		return;
+	}
+	/* Configure channel0 according to the device tree, before reading. */
+	err = adc_channel_setup_dt(chan);
+	if (err < 0) {
+		printk("Could not setup channel\n");
+		return;
+	}
+	while (1) {
+		(void)adc_sequence_init_dt(chan, seq);
+		err = adc_read(chan->dev, seq);
+		if (err < 0) {
+			printk("Could not read (%d)\n", err);
+			continue;
+		} 
+		// else {
+		// 	// printk("\nChannel %d: ",chan->channel_id);
+		// }
+		k_sleep(K_MSEC(3000));
+	}
+}
+
+// Display task
+void display_task()
+{
+	while(1){
+		printk("\nSoil moisture Channel %d value = %"PRId16, soil_moisture_chan0.channel_id, soilbuf);
+		printk("\nAir quality Channel %d value = %"PRId16, air_quality_chan1.channel_id, airbuf);
+		k_sleep(K_MSEC(5000));
+	}
+}
+
+void temp_sensor_task()
+{
+	int ret;
     uint8_t buffer[20];
 
     int32_t var1, var2_1, var2_2, var2, var3, var4, var5, var6;
@@ -32,56 +122,41 @@ void main(void)
     uint16_t hum_adc;
     int32_t hum_comp;
 
-    const struct device *const dev = DEVICE_DT_GET(I2C_NODE);
+    const struct device *const dev1 = DEVICE_DT_GET(I2C_NODE);
 
 /*******************   DEVICE READY CHECK   **************************/
-    if (!device_is_ready(dev)) {
-		printk("Bus %s not ready\n", dev->name);
+    if (!device_is_ready(dev1)) {
+		printk("Bus %s not ready\n", dev1->name);
 		return;
 	}
-    else{
-        printk("\n************************************************\n");
-        printk("\nBus %s is Ready!!!",dev->name);
-    }
 /*********************************************************************/
 
 /*******************   INITIALIZATION   ******************************/    
 
     // 1. Configure the sensor register 0x75 with filter coefficient
-    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CONFIG, CONFIG_VALUE);
+    ret = i2c_reg_write_byte(dev1, BME680_ADDR, BME680_CONFIG, CONFIG_VALUE);
     if(ret<0){
-        printk("\nError!! ");
+        // printk("\nError!! ");
         return;
-    }
-    else{
-        printk("\nSuccessfully configured with filter coefficent");
     }
 
     // 2. Configure the register 0x74(Temperature oversampling) to measure temperature
-    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
+    ret = i2c_reg_write_byte(dev1, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
     if(ret<0){
-        printk("\nError!! ");
-        // return;
-    }
-    else{
-        printk("\nSuccessfully Enabled Temprature measurement with over sampling");
+        // printk("\nError!! ");
+        return;
     }
     // 3. Configure the register 0x75(Humidity oversampling)
-    ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_HUM, HUM_OVERSAMPLE);
+    ret = i2c_reg_write_byte(dev1, BME680_ADDR, BME680_CTRL_HUM, HUM_OVERSAMPLE);
     if(ret<0){
-        printk("\nError!! ");
-        // return;
-    }
-    else{
-        printk("\nSuccessfully Enabled Humidity measurement with over sampling 2");
-        printk("\n****************************************************************\n");
+        // printk("\nError!! ");
+        return;
     }
 
 /*******************************************************************************************************/
 
-
 /******* CALIBRATION PARAMETERS ********************/ 
-    ret = i2c_burst_read(dev, BME680_ADDR, BME680_PAR, buffer, 10);
+    ret = i2c_burst_read(dev1, BME680_ADDR, BME680_PAR, buffer, 10);
     if(ret<0){
     //    printf("\n Error reading calibration parameter");
     }
@@ -94,56 +169,38 @@ void main(void)
         par_h6 = (uint8_t)buffer[6];
         par_h7 = (int8_t)buffer[7];
 
-        // printk("\nCALIBRATION PARAMETERS\nPAR1LSB = %d \t PAR1MSB = %d ", buffer[8], buffer[9]);
         par_t1 = (int32_t)(((uint16_t)buffer[9]) << 8) | (uint16_t)buffer[8]; 
     } 
-    ret = i2c_burst_read(dev, BME680_ADDR, BME680_TEMP_PAR2, (buffer+10), 3);
+    ret = i2c_burst_read(dev1, BME680_ADDR, BME680_TEMP_PAR2, (buffer+10), 3);
     if(ret<0){
-    //    printf("\n Error reading calibration parameter");
+       printf("\n Error reading calibration parameter");
     }
     else{
-        // printk("\nPAR2LSB = %d \t PAR2MSB = %d ", buffer[10], buffer[11]);
         par_t2 = (int32_t)(((int16_t)buffer[11]) << 8) | (int16_t)buffer[10];
-        // printk("\nPAR3 %d", buffer[8]);
         par_t3 = (int32_t)buffer[12];
     }
-    // printk("\npar_t1 = %d", par_t1);
-    // printk("\npar_t2 = %d", par_t2);
-    // printk("\npar_t3 = %d", par_t3);
-
-    // printk("\npar_h1 = %d", par_h1);
-    // printk("\npar_h2 = %d", par_h2);
-    // printk("\npar_h3 = %d", par_h3);
-    // printk("\npar_h4 = %d", par_h4);
-    // printk("\npar_h5 = %d", par_h5);
-    // printk("\npar_h6 = %d", par_h6);
-    // printk("\npar_h7 = %d", par_h7);
 
 /*******************************************************************************************************/
 
-    while (1)
+while (1)
     {
         k_sleep(K_MSEC(3000));
 
 /*******                READ NEW DATA BIT               *********************/
-        ret = i2c_reg_read_byte(dev, BME680_ADDR, BME680_EAS_STATUS_0, (buffer+13));
+        ret = i2c_reg_read_byte(dev1, BME680_ADDR, BME680_EAS_STATUS_0, (buffer+13));
         if(buffer[13] & 0x80){
-            // printk("\nNew Data Available");
-
 /********           READ TEMP (XLSB LSB MSB) AND HUMIDITY (MSB AND LSB)    *******************/ 
-            ret = i2c_burst_read(dev, BME680_ADDR, BME680_TEMP_MSB, (buffer+14), 5);
+            ret = i2c_burst_read(dev1, BME680_ADDR, BME680_TEMP_MSB, (buffer+14), 5);
             if(ret<0){
                 // printf("\n Error reading temperature data");
             }
             else{
-                // printk("\nXLSB = %d \t LSB = %d \t MSB = %d", buffer[16], buffer[15], buffer[14]);
-                printk("\nHUM_MSB = %d \tHUM_LSB = %d",buffer[17], buffer[18]);
+                // printk("\nHUM_MSB = %d \tHUM_LSB = %d",buffer[17], buffer[18]);
             }
 /*******               (xlsb (7 to 4 bits hence right shift))    ***************/ 
             adc_temp = (((int32_t)buffer[16])>>4) | (((int32_t)buffer[15])<<4) | (((int32_t)buffer[14])<<12);
-            // printk("\nTEMPERATURE ADC RAW VALUE IS %d", adc_temp);
             hum_adc = (((uint16_t)buffer[17] << 8) | (uint16_t)buffer[18]);
-            printk("\nHUMIDITY_ADC RAW VALUE IS %d", hum_adc);
+            // printk("\nHUMIDITY_ADC RAW VALUE IS %d", hum_adc);
 
 /*******************   TEMPERATURE CALCULATION   ******************************/  
             var1 = ((int32_t)adc_temp>>3) - ((int32_t)par_t1 << 1);
@@ -170,13 +227,24 @@ void main(void)
         }
 
         else{
-            printk("\nNo new data at the moment!! %x", buffer[0]);
+            // printk("\nNo new data at the moment!! %x", buffer[0]);
         }
 /*******            TRIGGER NEXT MEASUREMENT              ********************/         
-        ret = i2c_reg_write_byte(dev, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
+        ret = i2c_reg_write_byte(dev1, BME680_ADDR, BME680_CTRL_MEAS, TEMP_ENABLE);
         if(ret<0){
-            printk("\nError!! ");
-            // return;
+            // printk("\nError!! ");
+            return;
         }
     }
+
 }
+
+// Thread define
+K_THREAD_DEFINE(thread1_id, STACK_SIZE, adc_task, &soil_moisture_chan0, &soil_sequence, NULL, 5, 0, 0);
+K_THREAD_DEFINE(thread2_id, STACK_SIZE, adc_task, &air_quality_chan1, &air_sequence, NULL, 5, 0, 0);
+K_THREAD_DEFINE(thread3_id, STACK_SIZE, display_task, NULL, NULL, NULL, 5, 0, 0);
+K_THREAD_DEFINE(thread4_id, STACK_SIZE, temp_sensor_task, NULL, NULL, NULL, 5, 0, 0);
+
+
+
+
