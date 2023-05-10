@@ -67,6 +67,10 @@ struct adc_sequence air_sequence = {
 	.buffer_size = sizeof(airbuf),
 };
 
+
+int32_t hum_comp;
+int32_t temp_comp;
+
 // Thread task to read the adc channel
 void adc_task(struct adc_dt_spec* chan, struct adc_sequence* seq)
 {
@@ -96,31 +100,21 @@ void adc_task(struct adc_dt_spec* chan, struct adc_sequence* seq)
 	}
 }
 
-// Display task
-void display_task()
-{
-	while(1){
-		printk("\nSoil moisture Channel %d value = %"PRId16, soil_moisture_chan0.channel_id, soilbuf);
-		printk("\nAir quality Channel %d value = %"PRId16, air_quality_chan1.channel_id, airbuf);
-		k_sleep(K_MSEC(5000));
-	}
-}
-
 void temp_sensor_task()
 {
 	int ret;
     uint8_t buffer[20];
 
-    int32_t var1, var2_1, var2_2, var2, var3, var4, var5, var6;
+    int32_t var1, var1_h, var2_1, var2_2, var2_h, var3_h, var2, var3, var4, var5, var6;
     
     int32_t par_t1, par_t2, par_t3;
-    int32_t t_fine, temp_comp, adc_temp;
+    int32_t t_fine, adc_temp;
 
     uint16_t par_h1, par_h2;
     int8_t par_h3, par_h4, par_h5, par_h7;
     uint8_t par_h6;
+
     uint16_t hum_adc;
-    int32_t hum_comp;
 
     const struct device *const dev1 = DEVICE_DT_GET(I2C_NODE);
 
@@ -211,19 +205,17 @@ while (1)
 /*******************************************************************************************************/
 
 /*******************   HUMIDITY CALCULATION   ******************************/  
-            var1 = (int32_t)hum_adc - (int32_t)((int32_t)par_h1 << 4) - ((temp_comp * (int32_t)par_h3) / ((int32_t)100) >> 1);
+            var1_h = (int32_t)hum_adc - (int32_t)((int32_t)par_h1 << 4) - ((temp_comp * (int32_t)par_h3) / ((int32_t)100) >> 1);
             var2_1 = (int32_t)par_h2;
             var2_2 = ((temp_comp * (int32_t)par_h4) / (int32_t)100) + (((temp_comp * ((temp_comp * (int32_t)par_h5) / ((int32_t)100))) >> 6) / ((int32_t)100)) +  (int32_t)(1 << 14);
-            var2 = (var2_1 * var2_2) >> 10;
-            var3 = var1 * var2;
+            var2_h = (var2_1 * var2_2) >> 10;
+            var3_h = var1_h * var2_h;
             var4 = (((int32_t)par_h6 << 7) + ((temp_comp * (int32_t)par_h7) / ((int32_t)100))) >> 4;
-            var5 = ((var3 >> 14) * (var3 >> 14)) >> 10;
+            var5 = ((var3_h >> 14) * (var3_h >> 14)) >> 10;
             var6 = (var4 * var5) >> 1;
-            hum_comp = (((var3 + var6) >> 10) * ((int32_t)1000)) >> 12;
+            hum_comp = (((var3_h + var6) >> 10) * ((int32_t)1000)) >> 12;
             
 /*******************************************************************************************************/
-            printk("\nTemperature :: %d.%06d degC", (temp_comp / 100), ((temp_comp%100)*1000));
-            printk("\nHumidity :: %d.%06d",(hum_comp / 1000),((hum_comp % 1000)*1000));
         }
 
         else{
@@ -237,6 +229,21 @@ while (1)
         }
     }
 
+}
+
+// Display task
+void display_task()
+{
+	while(1){
+/*******************************************************************************************************/
+        printk("\n*************************************");
+		printk("\nSoil moisture Channel %d value = %"PRId16, soil_moisture_chan0.channel_id, soilbuf);
+		printk("\nAir quality Channel %d value = %"PRId16, air_quality_chan1.channel_id, airbuf);
+        printk("\nTemperature :: %d.%06d degC", (temp_comp / 100), ((temp_comp%100)*1000));
+        printk("\nHumidity :: %d.%06d",(hum_comp / 1000),((hum_comp % 1000)*1000));
+/*******************************************************************************************************/
+		k_sleep(K_MSEC(5000));
+	}
 }
 
 // Thread define
