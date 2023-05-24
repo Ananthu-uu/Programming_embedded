@@ -1,0 +1,10 @@
+# EC2023 config
+
+config EC2023
+	bool "EC2023 Environmental Sensor Hub"
+	default y
+	depends on DT_HAS_EC2023_ENABLED
+	select I2C
+	help
+	  Enable the driver for the EC2023 Environmental Sensor Hub with 2-wire
+	  interface.
