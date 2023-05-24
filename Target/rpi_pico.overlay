@@ -1,0 +1,64 @@
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/pinctrl/rpi-pico-rp2040-pinctrl.h>
+
+// LED
+/ {
+	aliases {
+		soilpin = &myled1;
+		// airpin 	= &myled2;
+	};
+
+	leds{
+		compatible = "gpio-leds";
+		myled1: led_0 {
+		   gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
+		};
+		// myled2: led_1 {
+		// 	gpios = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+		//  };
+	};
+};
+
+// ADC CHANNEL
+/ {
+	zephyr,user {
+		io-channels = <&adc 0>, <&adc 1>;
+		io-channel-names = "SOIL_MOISTURE","AIR_QUALITY";
+	};
+};
+&adc {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <10>;
+	};
+	channel@1 {
+		reg = <1>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <10>;
+	};
+};
+
+// I2C_1 FOR TARGET - CONTROLLER
+&pinctrl {
+	i2c1_default: i2c1_default {
+		group1 {
+			pinmux = <I2C1_SDA_P2>, <I2C1_SCL_P3>;       
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
+};
+&i2c1 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-names = "default";
+};
